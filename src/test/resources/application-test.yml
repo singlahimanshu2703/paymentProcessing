@@ -1,0 +1,24 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+  sql:
+    init:
+      mode: never
+
+jwt:
+  secret: testSecretKeyForJWTTokenGenerationWhichIsAtLeast256BitsLong123456
+  expiration: 86400000
+
+authorize-net:
+  api-login-id: test-login-id
+  transaction-key: test-transaction-key
+  sandbox: true
