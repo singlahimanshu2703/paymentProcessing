@@ -33,6 +33,7 @@ public class PaymentService {
     private final AuthorizeNetConfig authorizeNetConfig;
     private final OrderRepository orderRepository;
     private final TransactionRepository transactionRepository;
+    private final PaymentValidationService validationService;
 
     private MerchantAuthenticationType getMerchantAuth() {
         MerchantAuthenticationType merchantAuth = new MerchantAuthenticationType();
@@ -52,6 +53,9 @@ public class PaymentService {
 
     @Transactional(noRollbackFor = PaymentException.class)
     public PaymentResponse purchase(PaymentRequest request) {
+        // Validate amount
+        validationService.validateAmount(request.getAmount());
+        
         // Create order
         Order order = createOrder(request);
 
@@ -78,6 +82,9 @@ public class PaymentService {
 
     @Transactional(noRollbackFor = PaymentException.class)
     public PaymentResponse authorize(PaymentRequest request) {
+        // Validate amount
+        validationService.validateAmount(request.getAmount());
+        
         // Create order
         Order order = createOrder(request);
         order.setStatus("AUTHORIZED");
@@ -107,8 +114,13 @@ public class PaymentService {
         Order order = orderRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new PaymentException("Order not found", HttpStatus.NOT_FOUND));
 
-        if (!"AUTHORIZED".equals(order.getStatus())) {
-            throw new PaymentException("Order is not in AUTHORIZED status", HttpStatus.BAD_REQUEST);
+        // Validate order and state transition
+        validationService.validateOrder(order, null);
+        validationService.validateCaptureAllowed(order.getStatus());
+        
+        // Validate amount if provided
+        if (amount != null) {
+            validationService.validateAmount(amount);
         }
 
         // Get the authorize transaction
@@ -140,9 +152,9 @@ public class PaymentService {
         Order order = orderRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new PaymentException("Order not found", HttpStatus.NOT_FOUND));
 
-        if (!"AUTHORIZED".equals(order.getStatus()) && !"CAPTURED".equals(order.getStatus())) {
-            throw new PaymentException("Order cannot be cancelled", HttpStatus.BAD_REQUEST);
-        }
+        // Validate order and state transition
+        validationService.validateOrder(order, null);
+        validationService.validateCancelAllowed(order.getStatus());
 
         // Get the last transaction
         Transaction lastTxn = transactionRepository.findByOrder(order).stream()
@@ -172,9 +184,13 @@ public class PaymentService {
         Order order = orderRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new PaymentException("Order not found", HttpStatus.NOT_FOUND));
 
-        if (!"CAPTURED".equals(order.getStatus())) {
-            throw new PaymentException("Order is not captured, cannot refund", HttpStatus.BAD_REQUEST);
-        }
+        // Validate order and state transition
+        validationService.validateOrder(order, null);
+        validationService.validateRefundAllowed(order.getStatus());
+        
+        // Validate refund amount
+        BigDecimal refundAmount = amount != null ? amount : order.getAmount();
+        validationService.validateRefundAmount(refundAmount, order.getAmount());
 
         // Get the capture/purchase transaction
         Transaction captureTxn = transactionRepository.findByOrder(order).stream()
@@ -182,8 +198,6 @@ public class PaymentService {
                         && t.getStatus() == TransactionStatus.SUCCESS)
                 .findFirst()
                 .orElseThrow(() -> new PaymentException("Capture transaction not found", HttpStatus.NOT_FOUND));
-
-        BigDecimal refundAmount = amount != null ? amount : order.getAmount();
 
         // Create refund transaction
         TransactionRequestType txnRequest = new TransactionRequestType();
@@ -267,9 +281,15 @@ public class PaymentService {
                 }
                 txn.setCardType(txnResponse.getAccountType());
 
-                order.setStatus(type == TransactionType.AUTHORIZE ? "AUTHORIZED" : 
-                               type == TransactionType.VOID ? "CANCELLED" :
-                               type == TransactionType.REFUND ? order.getStatus() : "CAPTURED");
+                // Validate and set status with state transition validation
+                String newStatus = type == TransactionType.AUTHORIZE ? "AUTHORIZED" : 
+                                 type == TransactionType.VOID ? "CANCELLED" :
+                                 type == TransactionType.REFUND ? order.getStatus() : "CAPTURED";
+                
+                if (!newStatus.equals(order.getStatus())) {
+                    validationService.validateStateTransition(order.getStatus(), newStatus);
+                }
+                order.setStatus(newStatus);
                 order.setUpdatedAt(LocalDateTime.now());
                 orderRepository.save(order);
                 transactionRepository.save(txn);

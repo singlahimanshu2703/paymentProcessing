@@ -2,5 +2,6 @@ package com.payment.processing.enums;
 
 public enum TransactionStatus {
     SUCCESS,
-    FAILED
+    FAILED,
+    PENDING  // For transactions awaiting retry or async processing
 }

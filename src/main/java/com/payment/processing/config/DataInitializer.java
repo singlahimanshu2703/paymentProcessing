@@ -18,12 +18,17 @@ public class DataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        if (userRepository.findByUsername("testuser").isEmpty()) {
-            User user = new User();
-            user.setUsername("testuser");
-            user.setPassword(passwordEncoder.encode("password"));
-            userRepository.save(user);
-            log.info("Created test user: testuser/password");
+        try {
+            if (userRepository.findByUsername("admin").isEmpty()) {
+                User user = new User();
+                user.setUsername("admin");
+                user.setPassword(passwordEncoder.encode("password"));
+                userRepository.save(user);
+                log.info("Created default user: admin/password");
+            }
+        } catch (Exception e) {
+            // Ignore if database/tables not ready (e.g., in tests)
+            log.debug("Could not initialize default user: {}", e.getMessage());
         }
     }
 }

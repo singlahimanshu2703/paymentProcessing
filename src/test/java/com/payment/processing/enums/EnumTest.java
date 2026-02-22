@@ -28,15 +28,17 @@ class EnumTest {
 
     @Test
     void transactionStatus_Values() {
-        assertEquals(2, TransactionStatus.values().length);
+        assertEquals(3, TransactionStatus.values().length);
         
         assertNotNull(TransactionStatus.SUCCESS);
         assertNotNull(TransactionStatus.FAILED);
+        assertNotNull(TransactionStatus.PENDING);
     }
 
     @Test
     void transactionStatus_ValueOf() {
         assertEquals(TransactionStatus.SUCCESS, TransactionStatus.valueOf("SUCCESS"));
         assertEquals(TransactionStatus.FAILED, TransactionStatus.valueOf("FAILED"));
+        assertEquals(TransactionStatus.PENDING, TransactionStatus.valueOf("PENDING"));
     }
 }
